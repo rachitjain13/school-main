@@ -1,0 +1,1 @@
+console.log("School Portal Backend Starting...");
