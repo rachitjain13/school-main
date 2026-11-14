@@ -1,7 +1,7 @@
-
+import superAdminRouter from "../modules/super-admin/routes/super-admin.routes";
 import { Router } from "express";
 import mongoose from "mongoose";
-
+import authRouter from "../modules/auth/routes/auth.routes";
 const router = Router();
 
 // Basic server health
@@ -23,5 +23,7 @@ router.get("/ready", (_req, res) => {
     database: databaseConnected ? "connected" : "disconnected"
   });
 });
+router.use("/auth", authRouter);
+router.use("/super-admin", superAdminRouter);
 
 export default router;

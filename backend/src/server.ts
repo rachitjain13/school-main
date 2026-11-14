@@ -5,6 +5,10 @@ import mongoose from "mongoose";
 import app from "./app";
 import { env } from "./config/env";
 import { connectDatabase } from "./config/database";
+import {
+  connectRedis,
+  disconnectRedis,
+} from "./config/redis";
 import { logger } from "./infrastructure/logger";
 
 let server: Server | null = null;
@@ -38,11 +42,14 @@ const shutdown = async (signal: string): Promise<void> => {
       });
     }
 
+    await disconnectRedis();
+    logger.info("Redis disconnected successfully");
+
     await mongoose.disconnect();
+    logger.info("MongoDB disconnected successfully");
 
     clearTimeout(forceExit);
 
-    logger.info("MongoDB disconnected successfully");
     logger.info("Server shutdown completed");
 
     process.exit(0);
@@ -64,20 +71,27 @@ process.on("SIGTERM", () => {
 
 const startServer = async (): Promise<void> => {
   try {
+    // Connect MongoDB first.
     await connectDatabase();
+
+    // Connect Redis before accepting API requests.
+    await connectRedis();
 
     server = app.listen(env.PORT, () => {
       logger.info(
         {
           port: env.PORT,
-          environment: env.NODE_ENV
+          environment: env.NODE_ENV,
         },
         "School Portal server started"
       );
     });
   } catch (error) {
     logger.fatal({ err: error }, "Server startup failed");
-    await mongoose.disconnect();
+
+    await disconnectRedis().catch(() => undefined);
+    await mongoose.disconnect().catch(() => undefined);
+
     process.exit(1);
   }
 };

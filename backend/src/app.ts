@@ -4,7 +4,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
-
+import cookieParser from "cookie-parser";
 import { env } from "./config/env";
 import { logger } from "./infrastructure/logger";
 import apiRouter from "./routes";
@@ -27,7 +27,7 @@ app.use(express.json({ limit: "1mb" }));
 
 // HTTP request logging
 app.use(pinoHttp({ logger }));
-
+app.use(cookieParser());
 // API routes
 app.use(env.API_PREFIX, apiRouter);
 app.use(notFoundMiddleware);
