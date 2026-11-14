@@ -2,6 +2,7 @@ import superAdminRouter from "../modules/super-admin/routes/super-admin.routes";
 import { Router } from "express";
 import mongoose from "mongoose";
 import authRouter from "../modules/auth/routes/auth.routes";
+import schoolRouter from "../modules/school/routes/school.routes";
 const router = Router();
 
 // Basic server health
@@ -25,5 +26,5 @@ router.get("/ready", (_req, res) => {
 });
 router.use("/auth", authRouter);
 router.use("/super-admin", superAdminRouter);
-
+router.use("/school", schoolRouter);
 export default router;

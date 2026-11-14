@@ -10,6 +10,7 @@ import {
   disconnectRedis,
 } from "./config/redis";
 import { logger } from "./infrastructure/logger";
+import { closeTenantConnections } from "./infrastructure/tenant-connection.manager";
 
 let server: Server | null = null;
 let isShuttingDown = false;
@@ -30,6 +31,7 @@ const shutdown = async (signal: string): Promise<void> => {
   forceExit.unref();
 
   try {
+    // Stop accepting new HTTP requests.
     if (server) {
       await new Promise<void>((resolve, reject) => {
         server!.close((error) => {
@@ -42,11 +44,17 @@ const shutdown = async (signal: string): Promise<void> => {
       });
     }
 
+    // Disconnect Redis.
     await disconnectRedis();
     logger.info("Redis disconnected successfully");
 
+    // Close all school tenant database connections.
+    await closeTenantConnections();
+    logger.info("Tenant database connections closed");
+
+    // Disconnect central platform_core database.
     await mongoose.disconnect();
-    logger.info("MongoDB disconnected successfully");
+    logger.info("Central MongoDB disconnected successfully");
 
     clearTimeout(forceExit);
 
@@ -56,7 +64,11 @@ const shutdown = async (signal: string): Promise<void> => {
   } catch (error) {
     clearTimeout(forceExit);
 
-    logger.error({ err: error }, "Graceful shutdown failed");
+    logger.error(
+      { err: error },
+      "Graceful shutdown failed"
+    );
+
     process.exit(1);
   }
 };
@@ -71,12 +83,13 @@ process.on("SIGTERM", () => {
 
 const startServer = async (): Promise<void> => {
   try {
-    // Connect MongoDB first.
+    // Connect central MongoDB first.
     await connectDatabase();
 
     // Connect Redis before accepting API requests.
     await connectRedis();
 
+    // Start HTTP server only after dependencies are ready.
     server = app.listen(env.PORT, () => {
       logger.info(
         {
@@ -87,9 +100,15 @@ const startServer = async (): Promise<void> => {
       );
     });
   } catch (error) {
-    logger.fatal({ err: error }, "Server startup failed");
+    logger.fatal(
+      { err: error },
+      "Server startup failed"
+    );
 
     await disconnectRedis().catch(() => undefined);
+
+    await closeTenantConnections().catch(() => undefined);
+
     await mongoose.disconnect().catch(() => undefined);
 
     process.exit(1);
