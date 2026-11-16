@@ -12,6 +12,15 @@ import {
 import { logger } from "./infrastructure/logger";
 import { closeTenantConnections } from "./infrastructure/tenant-connection.manager";
 
+import {
+  startSchoolProvisioningWorker,
+  closeSchoolProvisioningWorker,
+} from "./infrastructure/workers/school-provisioning.worker";
+
+import {
+  closeSchoolProvisioningQueue,
+} from "./infrastructure/queues/school-provisioning.queue";
+
 let server: Server | null = null;
 let isShuttingDown = false;
 
@@ -22,7 +31,6 @@ const shutdown = async (signal: string): Promise<void> => {
 
   logger.info({ signal }, "Graceful shutdown started");
 
-  // Force shutdown if graceful shutdown takes too long.
   const forceExit = setTimeout(() => {
     logger.fatal("Graceful shutdown timed out");
     process.exit(1);
@@ -31,35 +39,27 @@ const shutdown = async (signal: string): Promise<void> => {
   forceExit.unref();
 
   try {
-    // Stop accepting new HTTP requests.
     if (server) {
       await new Promise<void>((resolve, reject) => {
         server!.close((error) => {
-          if (error) {
-            reject(error);
-          } else {
-            resolve();
-          }
+          if (error) reject(error);
+          else resolve();
         });
       });
     }
 
-    // Disconnect Redis.
+    await closeSchoolProvisioningWorker();
+    await closeSchoolProvisioningQueue();
+
     await disconnectRedis();
-    logger.info("Redis disconnected successfully");
 
-    // Close all school tenant database connections.
     await closeTenantConnections();
-    logger.info("Tenant database connections closed");
 
-    // Disconnect central platform_core database.
     await mongoose.disconnect();
-    logger.info("Central MongoDB disconnected successfully");
 
     clearTimeout(forceExit);
 
     logger.info("Server shutdown completed");
-
     process.exit(0);
   } catch (error) {
     clearTimeout(forceExit);
@@ -83,13 +83,12 @@ process.on("SIGTERM", () => {
 
 const startServer = async (): Promise<void> => {
   try {
-    // Connect central MongoDB first.
     await connectDatabase();
 
-    // Connect Redis before accepting API requests.
     await connectRedis();
 
-    // Start HTTP server only after dependencies are ready.
+    startSchoolProvisioningWorker();
+
     server = app.listen(env.PORT, () => {
       logger.info(
         {
@@ -105,10 +104,10 @@ const startServer = async (): Promise<void> => {
       "Server startup failed"
     );
 
+    await closeSchoolProvisioningWorker().catch(() => undefined);
+    await closeSchoolProvisioningQueue().catch(() => undefined);
     await disconnectRedis().catch(() => undefined);
-
     await closeTenantConnections().catch(() => undefined);
-
     await mongoose.disconnect().catch(() => undefined);
 
     process.exit(1);

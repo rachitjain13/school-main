@@ -132,9 +132,9 @@ export const provisionSchoolDatabase = async (
     );
 
     await School.updateOne(
-      { schoolId },
-      { $set: { status: "active" } }
-    );
+  { schoolId },
+  { $set: { status: "onboarding" } }
+);
 
     return {
       schoolId,
@@ -164,10 +164,6 @@ export const provisionSchoolDatabase = async (
         { $set: { status: "provisioning_failed" } }
       ),
     ]);
-    await School.updateOne(
-  { schoolId },
-  { $set: { status: "onboarding" } }
-);
 
     throw new SchoolProvisioningError(
       `School database provisioning failed: ${errorMessage}`

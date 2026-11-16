@@ -1,6 +1,7 @@
 import { loginRateLimiter } from "../middleware/login-rate-limit.middleware";
 import { Router } from "express";
-import { superAdminLogin } from "../controllers/login.controller";
+import { platformLogin } from "../controllers/login.controller";
+import { acceptMainAdminInvitationController } from "../../super-admin/controllers/main-admin-acceptance.controller";
 import {
     refreshAccessToken,
     logout,
@@ -9,11 +10,20 @@ import { requireTrustedOrigin } from "../middleware/origin.middleware";
 
 const router = Router();
 
+// Super Admin login (existing endpoint preserved)
 router.post(
     "/super-admin/login",
     requireTrustedOrigin,
     loginRateLimiter,
-    superAdminLogin
+    platformLogin
+);
+
+// General platform login for Super Admin and School Main Admin
+router.post(
+    "/login",
+    requireTrustedOrigin,
+    loginRateLimiter,
+    platformLogin
 );
 
 router.post(
@@ -27,5 +37,9 @@ router.post(
     requireTrustedOrigin,
     logout
 );
-
+router.post(
+    "/accept-main-admin-invitation",
+    requireTrustedOrigin,
+    acceptMainAdminInvitationController
+);
 export default router;

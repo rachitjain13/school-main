@@ -47,7 +47,27 @@ const envSchema = z.object({
         .enum(["strict", "lax", "none"])
         .default("lax"),
 
-    COOKIE_DOMAIN: z.string().optional()
+    COOKIE_DOMAIN: z.string().optional(),
+        // Email / SMTP configuration
+    SMTP_HOST: z.string().optional(),
+
+    SMTP_PORT: z.coerce.number().int().positive().default(587),
+
+    SMTP_SECURE: z
+        .enum(["true", "false"])
+        .default("false")
+        .transform((value) => value === "true"),
+
+    SMTP_USER: z.string().optional(),
+
+    SMTP_PASSWORD: z.string().optional(),
+
+    EMAIL_FROM: z.string().email().optional(),
+
+    FRONTEND_BASE_URL: z
+        .string()
+        .url()
+        .default("http://localhost:5173"),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

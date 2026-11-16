@@ -1,4 +1,4 @@
-
+import { resendMainAdminInvitationController } from "../controllers/main-admin-invitation.controller";
 import { Router, Request, Response } from "express";
 import { requireAuth } from "../../auth/middleware/auth.middleware";
 import { requirePermission } from "../../auth/middleware/permission.middleware";
@@ -51,6 +51,13 @@ router.post(
   requireAuth,
   requirePermission("platform:schools:create"),
   provisionSchoolController
+);
+// Manually resend Main Admin invitation
+router.post(
+  "/schools/:schoolId/main-admin/resend-invitation",
+  requireAuth,
+  requirePermission("platform:schools:create"),
+  resendMainAdminInvitationController
 );
 
 export default router;
