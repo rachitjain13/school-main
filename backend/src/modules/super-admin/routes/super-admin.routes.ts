@@ -6,8 +6,16 @@ import { createSchoolDraftController } from "../controllers/school-draft.control
 import { checkSchoolDuplicatesController } from "../controllers/school-duplicate-check.controller";
 import { confirmSchoolDraftController } from "../controllers/school-confirmation.controller";
 import { provisionSchoolController } from "../controllers/school-provisioning.controller";
+import { listSchoolsController } from "../controllers/school-list.controller";
+import { updateMainAdminController } from "../controllers/main-admin-update.controller";
 const router = Router();
-
+// List all confirmed schools
+router.get(
+  "/schools",
+  requireAuth,
+  requirePermission("platform:schools:read"),
+  listSchoolsController
+);
 // Super Admin profile
 router.get(
   "/me",
@@ -51,6 +59,13 @@ router.post(
   requireAuth,
   requirePermission("platform:schools:create"),
   provisionSchoolController
+);
+// Update School Main Admin details
+router.put(
+  "/schools/:schoolId/main-admin",
+  requireAuth,
+  requirePermission("platform:schools:update"),
+  updateMainAdminController
 );
 // Manually resend Main Admin invitation
 router.post(

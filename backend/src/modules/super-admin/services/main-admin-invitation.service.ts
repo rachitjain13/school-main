@@ -13,6 +13,8 @@ import {
 } from "./invitation-token.service";
 
 import { sendMainAdminInvitationEmail } from "../../../infrastructure/email.service";
+import { logger } from "../../../infrastructure/logger";
+
 import { env } from "../../../config/env";
 
 export class MainAdminInvitationError extends Error {
@@ -35,15 +37,14 @@ interface InvitationResult {
 export const createMainAdminInvitation = async (
     schoolId: string
 ): Promise<InvitationResult> => {
+    // 1. Find the school.
     const school = await School.findOne({ schoolId });
 
     if (!school) {
-        throw new MainAdminInvitationError(
-            "School not found",
-            404
-        );
+        throw new MainAdminInvitationError("School not found", 404);
     }
 
+    // 2. Verify that the school is ready for invitation.
     if (!["onboarding", "admin_invited"].includes(school.status)) {
         throw new MainAdminInvitationError(
             "School is not ready for Main Admin invitation",
@@ -51,6 +52,7 @@ export const createMainAdminInvitation = async (
         );
     }
 
+    // 3. Verify tenant database provisioning.
     const registry = await TenantRegistry.findOne({ schoolId });
 
     if (!registry || registry.status !== "active") {
@@ -62,42 +64,53 @@ export const createMainAdminInvitation = async (
 
     const email = school.mainAdmin.email.trim().toLowerCase();
 
+    // Generate a secure, one-time invitation token.
     const rawToken = generateInvitationToken();
     const tokenHash = hashInvitationToken(rawToken);
+
+    // Calculate expiry once so DB and email have identical expiry.
+    const expiresAt = getInvitationExpiry();
 
     const session = await mongoose.startSession();
 
     try {
         await session.withTransaction(async () => {
+            // 4. Check whether this email already has a platform account.
             let user = await PlatformUser.findOne({ email }).session(session);
 
-            if (user && (
-                user.role !== "school_main_admin" ||
-                user.status !== "invited"
-            )) {
+            if (
+                user &&
+                (
+                    user.role !== "school_main_admin" ||
+                    user.status !== "invited"
+                )
+            ) {
                 throw new MainAdminInvitationError(
                     "This email already belongs to an existing platform account",
                     409
                 );
             }
 
+            // 5. Create the invited platform user if it does not exist.
             if (!user) {
                 const createdUsers = await PlatformUser.create(
-                    [{
-                        fullName: school.mainAdmin.fullName,
-                        email,
-                        phone: school.mainAdmin.phone,
-                        role: "school_main_admin",
-                        status: "invited",
-                        createdBy: school.createdBy,
-                    }],
+                    [
+                        {
+                            fullName: school.mainAdmin.fullName,
+                            email,
+                            phone: school.mainAdmin.phone,
+                            role: "school_main_admin",
+                            status: "invited",
+                            createdBy: school.createdBy,
+                        },
+                    ],
                     { session }
                 );
 
                 user = createdUsers[0];
             }
 
-            // Invalidate previous pending invitations for this school.
+            // 6. Revoke previous pending invitations.
             await MainAdminInvitation.updateMany(
                 {
                     schoolId,
@@ -112,32 +125,38 @@ export const createMainAdminInvitation = async (
                 { session }
             );
 
+            // 7. Create the new invitation.
             await MainAdminInvitation.create(
-                [{
-                    schoolId,
-                    email,
-                    fullName: school.mainAdmin.fullName,
-                    tokenHash,
-                    status: "pending",
-                    expiresAt: getInvitationExpiry(),
-                    invitedBy: school.createdBy,
-                }],
+                [
+                    {
+                        schoolId,
+                        email,
+                        fullName: school.mainAdmin.fullName,
+                        tokenHash,
+                        status: "pending",
+                        expiresAt,
+                        invitedBy: school.createdBy,
+                    },
+                ],
                 { session }
             );
 
+            // 8. Update school status.
             await School.updateOne(
                 { schoolId },
-                { $set: { status: "admin_invited" } },
+                {
+                    $set: {
+                        status: "admin_invited",
+                    },
+                },
                 { session }
             );
         });
-
     } finally {
         await session.endSession();
     }
 
-    // Email is deliberately outside the database transaction.
-    // An email failure must not undo successful provisioning or invitation creation.
+    // 9. Send email after the transaction successfully commits.
     let emailSent = false;
 
     if (env.SMTP_HOST && env.EMAIL_FROM) {
@@ -150,17 +169,36 @@ export const createMainAdminInvitation = async (
                 fullName: school.mainAdmin.fullName,
                 schoolName: school.schoolName,
                 invitationUrl,
-                expiresAt: getInvitationExpiry(),
+                expiresAt,
             });
 
             emailSent = true;
-        } catch {
-            // The pending invitation remains stored.
-            // A Super Admin can resend it after SMTP is configured.
+
+            logger.info(
+                { schoolId },
+                "Main Admin invitation email sent successfully"
+            );
+        } catch (error) {
             emailSent = false;
+
+            logger.error(
+                {
+                    schoolId,
+                    err: error instanceof Error
+                        ? error.message
+                        : "Unknown email delivery error",
+                },
+                "Main Admin invitation created, but email delivery failed"
+            );
         }
+    } else {
+        logger.warn(
+            { schoolId },
+            "Main Admin invitation created, but SMTP is not configured"
+        );
     }
 
+    // 10. Return safe result. Never return the raw invitation token.
     return {
         schoolId,
         email,
