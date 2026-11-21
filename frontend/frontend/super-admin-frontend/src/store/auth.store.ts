@@ -1,4 +1,3 @@
-
 import { create } from "zustand";
 
 import type {
@@ -12,14 +11,12 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   isLoading: false,
 
-  setAuth: (
-    user: AuthUser,
-    accessToken: string | null
-  ) =>
+  setAuth: (user: AuthUser, accessToken: string) =>
     set({
       user,
       accessToken,
       isAuthenticated: true,
+      isLoading: false,
     }),
 
   clearAuth: () =>
@@ -30,4 +27,3 @@ export const useAuthStore = create<AuthState>((set) => ({
       isLoading: false,
     }),
 }));
-

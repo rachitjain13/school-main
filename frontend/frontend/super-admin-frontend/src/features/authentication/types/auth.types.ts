@@ -1,20 +1,24 @@
-
 export interface LoginCredentials {
   email: string;
   password: string;
 }
 
+export type UserRole = "super_admin" | "school_main_admin";
+
 export interface AuthUser {
   id: string;
-  name: string;
+  fullName: string;
   email: string;
-  role: string;
+  role: UserRole;
 }
 
-export interface LoginResponse {
-  accessToken?: string;
-  user: AuthUser;
-  message?: string;
+export interface LoginApiResponse {
+  success: boolean;
+  message: string;
+  data: {
+    user: AuthUser;
+    accessToken: string;
+  };
 }
 
 export interface AuthState {
@@ -23,10 +27,6 @@ export interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
 
-  setAuth: (
-    user: AuthUser,
-    accessToken: string | null
-  ) => void;
-
+  setAuth: (user: AuthUser, accessToken: string) => void;
   clearAuth: () => void;
 }

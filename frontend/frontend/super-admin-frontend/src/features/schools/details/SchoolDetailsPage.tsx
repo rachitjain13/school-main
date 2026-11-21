@@ -27,7 +27,7 @@ export default function SchoolDetailsPage() {
   // Otherwise, fall back to the initial demonstration records.
   const school =
     navigationState?.school?.id === schoolId
-      ? navigationState.school
+      ? navigationState?.school
       : initialSchools.find((item) => item.id === schoolId);
 
   if (!school) {

@@ -11,9 +11,12 @@ import {
   EyeOff,
   ArrowRight,
 } from "lucide-react";
+import { loginSuperAdmin } from "../services/auth.service";
+import { useAuthStore } from "../../../store/auth.store";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const setAuth = useAuthStore((state) => state.setAuth);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,32 +24,43 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  function handleLogin(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
+  async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
+  event.preventDefault();
+  setError("");
+  setLoading(true);
 
-    setLoading(true);
+  try {
+    const result = await loginSuperAdmin({
+      email: email.trim().toLowerCase(),
+      password,
+    });
 
-    // DEMO ONLY - Replace with backend authentication later.
-    setTimeout(() => {
-      const validEmail = "admin@educontrol.com";
-      const validPassword = "Admin@123";
+    if (result.user.role !== "super_admin") {
+      throw new Error("You are not authorized to access the Super Admin portal.");
+    }
 
-      if (
-        email.trim().toLowerCase() === validEmail &&
-        password === validPassword
-      ) {
-        sessionStorage.setItem("demo_super_admin", "true");
+    setAuth(result.user, result.accessToken);
 
-        navigate("/dashboard", { replace: true });
-      } else {
-        setError("Invalid email or password. Please try again.");
-      }
+    navigate("/dashboard", { replace: true });
+  } catch (error) {
+    const apiError = error as {
+      response?: {
+        data?: {
+          message?: string;
+        };
+      };
+    };
 
-      setLoading(false);
-    }, 500);
+    setError(
+      apiError.response?.data?.message ||
+      (error instanceof Error
+        ? error.message
+        : "Login failed. Please try again.")
+    );
+  } finally {
+    setLoading(false);
   }
-
+}
   return (
     <div className="min-h-screen bg-slate-50 lg:grid lg:grid-cols-2">
 
@@ -227,30 +241,6 @@ export default function LoginPage() {
               </button>
 
             </form>
-
-            {/* Demo credentials */}
-            <div className="mt-8 rounded-xl border border-blue-100 bg-blue-50 p-4">
-              <p className="text-sm font-bold text-blue-800">
-                Demo Login Credentials
-              </p>
-
-              <p className="mt-3 text-sm text-blue-700">
-                Email: admin@educontrol.com
-              </p>
-
-              <p className="mt-1 text-sm text-blue-700">
-                Password: Admin@123
-              </p>
-
-              <p className="mt-3 text-xs leading-5 text-blue-600">
-                Temporary frontend-only authentication.
-                These credentials are for development testing only.
-              </p>
-            </div>
-
-            <p className="mt-8 text-center text-xs text-slate-400">
-              Protected access for authorized platform administrators.
-            </p>
 
           </div>
         </div>
